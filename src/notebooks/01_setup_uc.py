@@ -4,7 +4,8 @@
 # MAGIC Creates the schemas, volumes and Delta tables, seeds curated reference data and evaluation
 # MAGIC cases, and grants the app's service principal what it needs. Safe to re-run (idempotent).
 # MAGIC
-# MAGIC Run as a user with `CREATE CATALOG` (or an existing catalog you own).
+# MAGIC Works in an existing catalog: you only need `USE CATALOG` + `CREATE SCHEMA` on it
+# MAGIC (or create the schema in Catalog Explorer first; then `USE SCHEMA` + `CREATE TABLE` is enough).
 
 # COMMAND ----------
 
@@ -19,12 +20,15 @@ reviewers = dbutils.widgets.get("reviewers_group").strip()
 
 # COMMAND ----------
 
-spark.sql(f"CREATE CATALOG IF NOT EXISTS `{catalog}`")
-spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{catalog}`.`{schema}` COMMENT 'Prior authorization review: core data'")
-spark.sql(f"CREATE SCHEMA IF NOT EXISTS `{catalog}`.`tools` COMMENT 'Unity Gateway MCP services and connections'")
+if not spark.sql(f"SHOW CATALOGS LIKE '{catalog}'").collect():
+    raise ValueError(f"Catalog {catalog} not found or not visible to you: pick an existing catalog")
+if not spark.sql(f"SHOW SCHEMAS IN `{catalog}` LIKE '{schema}'").collect():
+    spark.sql(f"CREATE SCHEMA `{catalog}`.`{schema}` COMMENT 'Prior authorization review'")
+existing_vols = {r[-1] for r in spark.sql(f"SHOW VOLUMES IN `{catalog}`.`{schema}`").collect()}
 for vol, comment in [("raw_documents", "Uploaded referrals, notes, labs, imaging reports"),
                      ("generated_reports", "Audit justification PDFs and decision letters")]:
-    spark.sql(f"CREATE VOLUME IF NOT EXISTS `{catalog}`.`{schema}`.`{vol}` COMMENT '{comment}'")
+    if vol not in existing_vols:
+        spark.sql(f"CREATE VOLUME `{catalog}`.`{schema}`.`{vol}` COMMENT '{comment}'")
 
 # COMMAND ----------
 
@@ -90,7 +94,7 @@ if app_sp:
     grant(f"GRANT USE SCHEMA, SELECT, MODIFY ON SCHEMA `{catalog}`.`{schema}` TO {p}")
     grant(f"GRANT READ VOLUME, WRITE VOLUME ON VOLUME `{catalog}`.`{schema}`.raw_documents TO {p}")
     grant(f"GRANT READ VOLUME, WRITE VOLUME ON VOLUME `{catalog}`.`{schema}`.generated_reports TO {p}")
-    grant(f"GRANT USE SCHEMA, EXECUTE ON SCHEMA `{catalog}`.`tools` TO {p}")
+    grant(f"GRANT EXECUTE ON SCHEMA `{catalog}`.`{schema}` TO {p}")
 if reviewers:
     g = f"`{reviewers}`"
     grant(f"GRANT USE CATALOG ON CATALOG `{catalog}` TO {g}")

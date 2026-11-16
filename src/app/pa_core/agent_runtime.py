@@ -137,6 +137,13 @@ def run_agent(agent_key: str, payload: dict) -> dict:
         if data is None:
             raise ValueError("model did not return parseable JSON")
         result, validation_issue = _validate(agent_key, data)
+        # `error` is reserved for real runtime failures. If the model wrote a note there
+        # (e.g. "one PubMed search failed"), keep it as a warning, not an agent error.
+        model_note = result.get("error") if "error" in result else None
+        if model_note:
+            result["error"] = None
+            if "tool_results" in result:
+                result["tool_results"].append({"tool_name": "agent_note", "status": "warning", "detail": str(model_note)[:500]})
     except Exception as e:  # noqa: BLE001
         logger.exception("Agent %s failed", agent_key)
         error = f"{type(e).__name__}: {str(e)[:500]}"

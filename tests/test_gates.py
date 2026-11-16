@@ -79,3 +79,12 @@ def test_never_deny():
         o = gates.evaluate(_compliance(["Provider NPI"]), _clinical(10, False, False),
                            _coverage([("x", "NOT_MET", 0)], status=status), {"valid": False, "summary": ""})
         assert o.recommendation in (gates.APPROVE, gates.PEND)
+
+
+def test_soft_agent_note_does_not_fail_valid_codes():
+    # Regression (2026-11-16 app run): the model wrote a PubMed hiccup into clinical.error while
+    # all ICD-10 codes were validated; gate 2 must judge the codes themselves.
+    clin = _clinical()
+    clin["diagnosis_validation"] = [{"code": c, "valid": True, "billable": True} for c in ("R91.1", "J18.9", "R05.9")]
+    o = gates.evaluate(_compliance(), clin, _coverage([("Provider Specialty", "MET", 95), ("Medical Necessity", "MET", 90)]), CPT_OK)
+    assert o.gate_results["gate_2_codes"] == "PASS"

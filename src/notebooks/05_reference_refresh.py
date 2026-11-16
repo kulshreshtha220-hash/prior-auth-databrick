@@ -16,8 +16,8 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog", "prior_auth")
-dbutils.widgets.text("schema", "core")
+dbutils.widgets.text("catalog", "db_certification")
+dbutils.widgets.text("schema", "prior_auth")
 dbutils.widgets.text("icd10_year", "2026")
 dbutils.widgets.text("icd10_url", "https://ftp.cdc.gov/pub/Health_Statistics/NCHS/Publications/ICD10CM/{year}/icd10cm-Code%20Descriptions-{year}.zip")
 dbutils.widgets.text("ncd_url", "https://downloads.cms.gov/medicare-coverage-database/downloads/exports/ncd.zip")

@@ -105,7 +105,8 @@ def system_prompt(agent_key: str) -> tuple[str, str]:
         "running on Databricks. Follow the skill below exactly. The user message is a JSON "
         "payload with the case data. Use your tools when the skill calls for them. "
         "When finished, answer with ONLY the JSON object described by the output schema, "
-        "no prose and no markdown fences.\n\n"
+        "no prose and no markdown fences. Leave the `error` field null: it is reserved for system "
+        "failures. Report tool problems as tool_results entries with status 'warning'.\n\n"
     )
     text = intro + skill
     if agent_key == "synthesis":

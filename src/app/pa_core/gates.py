@@ -114,8 +114,10 @@ def evaluate(compliance: dict, clinical: dict, coverage: dict, cpt_validation: d
     # ---------------- Gate 2: codes
     if recommendation == APPROVE:
         dx = [d for d in clinical.get("diagnosis_validation") or [] if isinstance(d, dict)]
-        if "clinical" in errors or not dx:
-            fail("gate_2_codes", "Diagnosis codes could not be validated (clinical agent error or ICD-10 source UNKNOWN)")
+        if not dx:
+            why = (f"Clinical agent error: {str(clinical.get('error') or clinical.get('_error'))[:200]}"
+                   if "clinical" in errors else "ICD-10 validation returned no results (source UNKNOWN)")
+            fail("gate_2_codes", f"Diagnosis codes could not be validated ({why}); manual code check required")
         else:
             bad = [d.get("code") for d in dx if not d.get("valid")]
             nonbill = [d.get("code") for d in dx if d.get("valid") and not d.get("billable")]

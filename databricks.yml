@@ -17,11 +17,11 @@ include:
 
 variables:
   catalog:
-    description: Unity Catalog catalog (must exist or you need CREATE CATALOG)
-    default: prior_auth
+    description: Unity Catalog catalog (existing catalog)
+    default: db_certification
   schema:
     description: Schema for tables and volumes
-    default: core
+    default: prior_auth
   warehouse_id:
     description: SQL warehouse id (Delta writes, ai_parse_document, reference lookups)
   llm_model:

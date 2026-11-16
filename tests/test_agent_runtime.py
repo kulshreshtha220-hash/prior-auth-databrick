@@ -67,3 +67,12 @@ def test_skill_prompts_load_for_all_agents():
         text, src = system_prompt(k)
         assert "bundled SKILL.md" in src and len(text) > 1000
     assert "DATABRICKS DEPLOYMENT OVERRIDE" in system_prompt("synthesis")[0]
+
+
+def test_model_written_error_becomes_warning(monkeypatch):
+    final = {"checklist": [], "overall_status": "complete", "error": "PubMed search partially failed"}
+    comp = NS(create=lambda **kw: NS(choices=[NS(message=NS(tool_calls=None, content=json.dumps(final)))]))
+    monkeypatch.setattr(rt, "openai_client", lambda model: NS(chat=NS(completions=comp)))
+    monkeypatch.setattr(rt.Toolbox, "for_agent", classmethod(lambda cls, k: Toolbox(k)))
+    out = rt.run_agent("compliance", {"patient_name": "x"})
+    assert out["error"] is None

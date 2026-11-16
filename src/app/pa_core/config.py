@@ -64,9 +64,16 @@ class Settings:
     # "direct": public URLs (local dev, or if MCP services are unavailable);
     # "off": no tools (every tool answers UNKNOWN).
     mcp_mode: str = field(default_factory=lambda: _env("PA_MCP_MODE", "service"))
-    # Catalog.schema that holds the MCP services (default: <catalog>.tools)
+    # Catalog.schema that holds the MCP services (default: the same schema as the tables)
     mcp_service_schema: str = field(default_factory=lambda: _env("PA_MCP_SERVICE_SCHEMA", ""))
     mcp_timeout_s: float = field(default_factory=lambda: float(_env("PA_MCP_TIMEOUT_S", "60")))
+    # Per-source override: where each data source comes from.
+    #   "uc"  = Unity Catalog reference tables (no MCP call)
+    #   "mcp" = live MCP server (mode from PA_MCP_MODE), with UC fallback
+    #   "off" = disabled (checks that need it report UNKNOWN)
+    # e.g. PA_DATA_SOURCES="icd10_codes:uc,npi_registry:uc,cms_coverage:uc,pubmed:mcp,clinical_trials:mcp"
+    # Sources not listed use "mcp".
+    data_sources: str = field(default_factory=lambda: _env("PA_DATA_SOURCES", ""))
     # Fall back to Delta reference tables when a live tool is unavailable.
     reference_fallback: bool = field(default_factory=lambda: _env_bool("PA_REFERENCE_FALLBACK", True))
 
@@ -103,7 +110,15 @@ class Settings:
 
     @property
     def mcp_schema(self) -> str:
-        return self.mcp_service_schema or f"{self.catalog}.tools"
+        return self.mcp_service_schema or self.fq_schema
+
+    def source_mode(self, server: str) -> str:
+        for part in self.data_sources.split(","):
+            if ":" in part:
+                name, mode = (x.strip().lower() for x in part.split(":", 1))
+                if name == server and mode in ("uc", "mcp", "off"):
+                    return mode
+        return "off" if self.mcp_mode == "off" else "mcp"
 
     def model_for(self, agent_key: str) -> str:
         return _env(f"PA_LLM_MODEL_{agent_key.upper()}") or self.llm_model

@@ -1,3 +1,13 @@
+# Databricks App runtime config (pa-review).
+#
+# CURRENT: demo mode (no SQL warehouse / Lakebase yet). Agents run inside the app,
+# results are kept in memory, data comes from the live MCP servers.
+#
+# When the SQL warehouse + Lakebase exist (see docs/RUNBOOK.md):
+#   PA_STATE_STORE=lakebase, PA_WRITE_DELTA=true, add the sql-warehouse resource and
+#   DATABRICKS_WAREHOUSE_ID (valueFrom: sql-warehouse), and to read ICD-10 / NPI / CMS
+#   from Unity Catalog instead of MCP set:
+#   PA_DATA_SOURCES="icd10_codes:uc,npi_registry:uc,cms_coverage:uc,pubmed:mcp,clinical_trials:mcp"
 command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
 
 env:
@@ -12,9 +22,11 @@ env:
   - name: PA_WRITE_DELTA
     value: "false"
   - name: PA_LLM_MODEL
-    value: "databricks-claude-sonnet-4-5"   # notebook 07 cell 1 wala naam
+    value: "databricks-claude-sonnet-4-5"
   - name: PA_MCP_MODE
     value: "direct"
+  - name: PA_DATA_SOURCES
+    value: ""
   - name: PA_USE_PROMPT_REGISTRY
     value: "false"
   - name: PA_REFERENCE_FALLBACK

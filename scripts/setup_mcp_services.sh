@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Register the 5 Anthropic healthcare MCP servers as Unity Gateway MCP services
-# in <catalog>.tools, each with a tool allow-list (same tools Microsoft's agents use).
+# in <catalog>.<schema> (same schema as the tables), each with a tool allow-list (same tools Microsoft's agents use).
 #
 #   PROFILE=my-ws CATALOG=prior_auth ./scripts/setup_mcp_services.sh
 #
@@ -12,7 +12,7 @@
 set -euo pipefail
 PROFILE="${PROFILE:-DEFAULT}"
 CATALOG="${CATALOG:-prior_auth}"
-SCHEMA="${MCP_SCHEMA:-tools}"
+SCHEMA="${MCP_SCHEMA:-core}"
 
 # service_name|base_url|allowed tools (comma separated)
 SERVERS=(

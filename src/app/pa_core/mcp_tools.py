@@ -25,7 +25,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import reference
+from . import reference, sql
 from .config import AGENT_MCP_SERVERS, MCP_PUBLIC_URLS, get_settings
 
 logger = logging.getLogger(__name__)
@@ -145,33 +145,45 @@ class Toolbox:
         s = get_settings()
         box = cls(agent_key)
         for server in AGENT_MCP_SERVERS.get(agent_key, ()):
-            if s.mcp_mode == "off":
-                box.unavailable[server] = "MCP disabled (PA_MCP_MODE=off)"
-            else:
-                try:
-                    if s.mcp_mode == "direct":
-                        srv = _DirectServer(MCP_PUBLIC_URLS[server], s.mcp_timeout_s)
-                    else:
-                        srv = _ServiceServer(f"{s.mcp_schema}.{server}")
-                    listed = srv.list_tools()
-                    box._servers[server] = srv
-                    for t in listed:
-                        box.tools.append(ToolSpec(
-                            server=server,
-                            name=t.name,
-                            description=(t.description or "")[:1000],
-                            parameters=getattr(t, "inputSchema", None) or {"type": "object", "properties": {}},
-                            source="mcp",
-                        ))
-                    continue
-                except Exception as e:  # noqa: BLE001 - any failure means "unavailable"
-                    logger.warning("MCP server %s unavailable: %s", server, e)
-                    box.unavailable[server] = f"{type(e).__name__}: {str(e)[:200]}"
-            # adapter fallback
-            if s.reference_fallback and s.warehouse_id and server in reference.ADAPTER_TOOLS:
-                for t in reference.ADAPTER_TOOLS[server]:
-                    box.tools.append(ToolSpec(server, t["name"], t["description"], t["parameters"], "reference"))
+            mode = s.source_mode(server)
+            if mode == "off":
+                box.unavailable[server] = "source disabled (PA_DATA_SOURCES / PA_MCP_MODE=off)"
+                continue
+            if mode == "uc":
+                if server not in reference.ADAPTER_TOOLS:
+                    box.unavailable[server] = "no Unity Catalog adapter for this source"
+                elif not sql.available():
+                    box.unavailable[server] = "Unity Catalog source needs a SQL warehouse (DATABRICKS_WAREHOUSE_ID)"
+                else:
+                    box._add_reference_tools(server)
+                continue
+            try:
+                if s.mcp_mode == "direct":
+                    srv = _DirectServer(MCP_PUBLIC_URLS[server], s.mcp_timeout_s)
+                else:
+                    srv = _ServiceServer(f"{s.mcp_schema}.{server}")
+                listed = srv.list_tools()
+                box._servers[server] = srv
+                for t in listed:
+                    box.tools.append(ToolSpec(
+                        server=server,
+                        name=t.name,
+                        description=(t.description or "")[:1000],
+                        parameters=getattr(t, "inputSchema", None) or {"type": "object", "properties": {}},
+                        source="mcp",
+                    ))
+                continue
+            except Exception as e:  # noqa: BLE001 - any failure means "unavailable"
+                logger.warning("MCP server %s unavailable: %s", server, e)
+                box.unavailable[server] = f"{type(e).__name__}: {str(e)[:200]}"
+            # adapter fallback when the live server is down
+            if s.reference_fallback and sql.available() and server in reference.ADAPTER_TOOLS:
+                box._add_reference_tools(server)
         return box
+
+    def _add_reference_tools(self, server: str) -> None:
+        for t in reference.ADAPTER_TOOLS[server]:
+            self.tools.append(ToolSpec(server, t["name"], t["description"], t["parameters"], "reference"))
 
     # ---------------------------------------------------------------- use
     def openai_tools(self) -> list[dict]:
@@ -181,19 +193,25 @@ class Toolbox:
         ]
 
     def availability_note(self) -> str:
-        if not self.unavailable:
-            return ""
-        lines = [f"- {srv}: {why}" for srv, why in self.unavailable.items()]
-        adapters = sorted({t.server for t in self.tools if t.source == "reference"})
-        note = (
-            "TOOL AVAILABILITY NOTICE\nThese live data sources are unavailable for this run:\n"
-            + "\n".join(lines)
-            + "\nFor any check that depends on them, report status UNKNOWN (tool_results status 'warning'), "
-            "state that manual verification is required, and never mark the item as failed or invalid because the tool was missing."
-        )
-        if adapters:
-            note += f"\nReference-snapshot adapters are available for: {', '.join(adapters)}. Prefer them and say the data came from a snapshot."
-        return note
+        parts = []
+        uc = sorted({t.server for t in self.tools if t.source == "reference"})
+        if uc:
+            mapping = "\n".join(f"- {srv}: {reference.SKILL_TOOL_MAP.get(srv, '')}" for srv in uc)
+            parts.append(
+                "DATA SOURCES FOR THIS DEPLOYMENT\n"
+                "These sources are served from Unity Catalog reference tables instead of the MCP tools named in the "
+                "skill. Use the Unity Catalog tool wherever the skill names the MCP tool:\n" + mapping +
+                "\nTheir results are authoritative. In tool_results, name the tool you actually called."
+            )
+        if self.unavailable:
+            lines = "\n".join(f"- {srv}: {why}" for srv, why in self.unavailable.items())
+            parts.append(
+                "TOOL AVAILABILITY NOTICE\nThese data sources are unavailable for this run:\n" + lines +
+                "\nFor any check that depends on them, report status UNKNOWN (tool_results status 'warning'), "
+                "state that manual verification is required, and never mark the item as failed or invalid "
+                "because the tool was missing. PubMed and Clinical Trials are supplementary: skip them quietly."
+            )
+        return "\n\n".join(parts)
 
     def call(self, fn_name: str, args_json: str | dict) -> str:
         spec = next((t for t in self.tools if t.fn_name == fn_name), None)
@@ -209,7 +227,11 @@ class Toolbox:
             if spec.source == "reference":
                 payload = {"status": "OK", "source": "reference_snapshot", "data": reference.call(spec.name, args)}
             else:
-                payload = _result_to_payload(self._servers[spec.server].call_tool(spec.name, args))
+                try:
+                    raw = self._servers[spec.server].call_tool(spec.name, args)
+                except Exception:  # noqa: BLE001 - retry once, then report UNKNOWN below
+                    raw = self._servers[spec.server].call_tool(spec.name, args)
+                payload = _result_to_payload(raw)
         except Exception as e:  # noqa: BLE001
             logger.warning("Tool %s failed: %s", fn_name, e)
             payload = unknown(f"{type(e).__name__}: {str(e)[:300]}")

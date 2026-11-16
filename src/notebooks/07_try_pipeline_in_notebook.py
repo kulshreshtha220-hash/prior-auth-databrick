@@ -6,6 +6,13 @@
 # MAGIC warehouse needed. Use it to prove the model and MCP access work before deploying anything.
 # MAGIC
 # MAGIC Takes 1–4 minutes. Prints progress, the gate outcome, and what each agent found.
+# MAGIC
+# MAGIC **Data sources** widget:
+# MAGIC * `mcp_all`: all 5 sources from the live MCP servers
+# MAGIC * `uc_plus_literature`: ICD-10, NPI and CMS from Unity Catalog tables; PubMed + Clinical Trials live
+# MAGIC * `uc_only`: everything inside Databricks; PubMed + Clinical Trials switched off
+# MAGIC
+# MAGIC The UC options need the reference tables loaded first (notebook `05_reference_refresh`).
 
 # COMMAND ----------
 
@@ -16,6 +23,9 @@
 
 dbutils.widgets.text("llm_model", "auto", "LLM: auto | system.ai.<model> | databricks-<model>")
 dbutils.widgets.dropdown("mcp_mode", "direct", ["direct", "service", "off"], "MCP mode")
+dbutils.widgets.dropdown("data_sources", "mcp_all", ["mcp_all", "uc_plus_literature", "uc_only"], "Data sources")
+dbutils.widgets.text("catalog", "db_certification")
+dbutils.widgets.text("schema", "prior_auth")
 dbutils.widgets.dropdown("case", "seed-001-lung-biopsy", ["seed-001-lung-biopsy", "seed-002-invalid-icd", "seed-003-thin-notes", "seed-004-bad-npi"])
 
 # COMMAND ----------
@@ -49,13 +59,24 @@ print("\nUsing model:", model)
 # COMMAND ----------
 
 import os, sys
+SOURCES = {
+    "mcp_all": "",
+    "uc_plus_literature": "icd10_codes:uc,npi_registry:uc,cms_coverage:uc,pubmed:mcp,clinical_trials:mcp",
+    "uc_only": "icd10_codes:uc,npi_registry:uc,cms_coverage:uc,pubmed:off,clinical_trials:off",
+}
 os.environ.update({
     "PA_LLM_MODEL": model, "PA_MCP_MODE": dbutils.widgets.get("mcp_mode"),
+    "PA_CATALOG": dbutils.widgets.get("catalog"), "PA_SCHEMA": dbutils.widgets.get("schema"),
+    "PA_DATA_SOURCES": SOURCES[dbutils.widgets.get("data_sources")],
     "PA_AGENT_MODE": "inprocess", "PA_STATE_STORE": "memory", "PA_WRITE_DELTA": "false",
-    "PA_USE_PROMPT_REGISTRY": "false", "PA_REFERENCE_FALLBACK": "false", "MLFLOW_DISABLE_AGENT_HINT": "1",
+    "PA_USE_PROMPT_REGISTRY": "false", "PA_REFERENCE_FALLBACK": "true", "MLFLOW_DISABLE_AGENT_HINT": "1",
 })
 sys.path.insert(0, os.path.abspath("../app"))
+from pa_core import sql as pa_sql  # noqa: E402
 from pa_core.llm import openai_client  # noqa: E402
+
+pa_sql.use_spark(spark)  # UC lookups run on this notebook's serverless compute (no SQL warehouse needed)
+print("Data sources:", os.environ["PA_DATA_SOURCES"] or "all live MCP")
 
 r = openai_client(model).chat.completions.create(
     model=model, messages=[{"role": "user", "content": "Reply with exactly: model ok"}], max_tokens=10)
@@ -63,7 +84,7 @@ print(r.choices[0].message.content)
 
 # COMMAND ----------
 
-# MAGIC %md ### 3. Quick MCP check (lists the tools of each healthcare server)
+# MAGIC %md ### 3. Data source check (tools each agent will use)
 
 # COMMAND ----------
 
@@ -72,7 +93,11 @@ from pa_core.mcp_tools import Toolbox
 for agent in ("clinical", "coverage"):
     box = Toolbox.for_agent(agent)
     print(f"{agent}: {len(box.tools)} tools; unavailable: {box.unavailable or 'none'}")
-    print("   ", ", ".join(t.name for t in box.tools)[:400])
+    print("   ", ", ".join(f"{t.name} [{t.source}]" for t in box.tools)[:500])
+if "uc" in dbutils.widgets.get("data_sources"):
+    for t in ("ref_icd10cm", "ref_ncd", "ref_lcd", "ref_npi_cache"):
+        n = spark.table(f"`{os.environ['PA_CATALOG']}`.`{os.environ['PA_SCHEMA']}`.`{t}`").count()
+        print(f"  {t}: {n:,} rows" + ("   <-- empty: run 05_reference_refresh first" if n == 0 and t != "ref_npi_cache" else ""))
 
 # COMMAND ----------
 
