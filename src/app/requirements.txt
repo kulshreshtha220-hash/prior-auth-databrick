@@ -1,0 +1,15 @@
+# Databricks App runtime (FastAPI + LangGraph orchestrator)
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+pydantic>=2.7,<3
+python-multipart>=0.0.9,<1
+fpdf2>=2.8,<3
+httpx>=0.27,<1
+databricks-sdk>=0.60
+mlflow[databricks]>=3.4
+openai>=1.60
+langgraph>=1.0,<2
+langgraph-checkpoint-postgres>=3.0
+psycopg[binary,pool]>=3.2
+mcp>=1.24,<2
+databricks-mcp>=0.4

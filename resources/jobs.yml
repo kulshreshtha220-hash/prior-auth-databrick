@@ -1,0 +1,88 @@
+# Lakeflow Jobs. All tasks run on serverless compute.
+resources:
+  jobs:
+
+    # One-time (re-runnable) setup: tables, seeds, grants, prompts.
+    pa_setup:
+      name: "[${bundle.target}] PA - setup Unity Catalog and prompts"
+      tasks:
+        - task_key: setup_uc
+          notebook_task:
+            notebook_path: ../src/notebooks/01_setup_uc.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              app_sp: ${var.app_sp}
+              reviewers_group: ${var.reviewers_group}
+        - task_key: register_prompts
+          depends_on: [{task_key: setup_uc}]
+          notebook_task:
+            notebook_path: ../src/notebooks/02_register_prompts.py
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+
+    # Pick model -> register prompts -> deploy 4 agents in parallel -> smoke test.
+    pa_agents_deploy:
+      name: "[${bundle.target}] PA - deploy agents"
+      max_concurrent_runs: 1
+      timeout_seconds: 7200
+      tasks:
+        - task_key: pick_model
+          notebook_task:
+            notebook_path: ../src/notebooks/00_pick_model.py
+        - task_key: register_prompts
+          notebook_task:
+            notebook_path: ../src/notebooks/02_register_prompts.py
+            base_parameters: {catalog: "${var.catalog}", schema: "${var.schema}"}
+        - task_key: deploy_compliance
+          depends_on: [{task_key: pick_model}, {task_key: register_prompts}]
+          notebook_task:
+            notebook_path: ../src/notebooks/03_deploy_agent.py
+            base_parameters: {agent: compliance, catalog: "${var.catalog}", schema: "${var.schema}", llm_model: "${var.llm_model}", mcp_mode: "${var.mcp_mode}", warehouse_id: "${var.warehouse_id}", endpoint_prefix: "${var.endpoint_prefix}", auth_mode: "${var.agent_auth_mode}", secret_scope: "${var.secret_scope}", app_sp: "${var.app_sp}"}
+        - task_key: deploy_clinical
+          depends_on: [{task_key: pick_model}, {task_key: register_prompts}]
+          notebook_task:
+            notebook_path: ../src/notebooks/03_deploy_agent.py
+            base_parameters: {agent: clinical, catalog: "${var.catalog}", schema: "${var.schema}", llm_model: "${var.llm_model}", mcp_mode: "${var.mcp_mode}", warehouse_id: "${var.warehouse_id}", endpoint_prefix: "${var.endpoint_prefix}", auth_mode: "${var.agent_auth_mode}", secret_scope: "${var.secret_scope}", app_sp: "${var.app_sp}"}
+        - task_key: deploy_coverage
+          depends_on: [{task_key: pick_model}, {task_key: register_prompts}]
+          notebook_task:
+            notebook_path: ../src/notebooks/03_deploy_agent.py
+            base_parameters: {agent: coverage, catalog: "${var.catalog}", schema: "${var.schema}", llm_model: "${var.llm_model}", mcp_mode: "${var.mcp_mode}", warehouse_id: "${var.warehouse_id}", endpoint_prefix: "${var.endpoint_prefix}", auth_mode: "${var.agent_auth_mode}", secret_scope: "${var.secret_scope}", app_sp: "${var.app_sp}"}
+        - task_key: deploy_synthesis
+          depends_on: [{task_key: pick_model}, {task_key: register_prompts}]
+          notebook_task:
+            notebook_path: ../src/notebooks/03_deploy_agent.py
+            base_parameters: {agent: synthesis, catalog: "${var.catalog}", schema: "${var.schema}", llm_model: "${var.llm_model}", mcp_mode: "${var.mcp_mode}", warehouse_id: "${var.warehouse_id}", endpoint_prefix: "${var.endpoint_prefix}", auth_mode: "${var.agent_auth_mode}", secret_scope: "${var.secret_scope}", app_sp: "${var.app_sp}"}
+        - task_key: smoke_test
+          depends_on: [{task_key: deploy_compliance}, {task_key: deploy_clinical}, {task_key: deploy_coverage}, {task_key: deploy_synthesis}]
+          notebook_task:
+            notebook_path: ../src/notebooks/04_smoke_test.py
+            base_parameters: {endpoint_prefix: "${var.endpoint_prefix}"}
+
+    # Weekly reference data refresh (ICD-10-CM, NCD/LCD, NPI cache).
+    pa_reference_refresh:
+      name: "[${bundle.target}] PA - reference data refresh"
+      schedule:
+        quartz_cron_expression: "0 0 3 ? * SUN"
+        timezone_id: UTC
+        pause_status: PAUSED
+      tasks:
+        - task_key: refresh
+          notebook_task:
+            notebook_path: ../src/notebooks/05_reference_refresh.py
+            base_parameters: {catalog: "${var.catalog}", schema: "${var.schema}"}
+
+    # Nightly batch evaluation with MLflow 3 (fails if accuracy drops).
+    pa_batch_evaluation:
+      name: "[${bundle.target}] PA - batch evaluation"
+      schedule:
+        quartz_cron_expression: "0 30 2 * * ?"
+        timezone_id: UTC
+        pause_status: PAUSED
+      tasks:
+        - task_key: evaluate
+          notebook_task:
+            notebook_path: ../src/notebooks/06_batch_evaluation.py
+            base_parameters: {catalog: "${var.catalog}", schema: "${var.schema}", endpoint_prefix: "${var.endpoint_prefix}"}

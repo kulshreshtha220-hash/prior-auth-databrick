@@ -1,0 +1,28 @@
+# Databricks App runtime config for pa-review.
+# Resources (warehouse, agent endpoints, volume, Lakebase) are attached in
+# resources/app.yml; values below reference them with valueFrom.
+command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+
+env:
+  - name: PA_CATALOG
+    value: "prior_auth"
+  - name: PA_SCHEMA
+    value: "core"
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  - name: PA_AGENT_MODE          # endpoint | inprocess | mock
+    value: "endpoint"
+  - name: PA_AGENT_ENDPOINT_PREFIX
+    value: "pa"
+  - name: PA_STATE_STORE         # lakebase | memory
+    value: "lakebase"
+  - name: PA_WRITE_DELTA
+    value: "true"
+  - name: PA_LLM_MODEL           # only used in inprocess mode; agents carry their own
+    value: "system.ai.claude-sonnet-4-5"
+  - name: PA_MCP_MODE            # service | direct | off (inprocess mode only)
+    value: "service"
+  - name: PA_MLFLOW_EXPERIMENT
+    value: "/Shared/prior-auth/app-traces"
+  - name: PA_AGENT_TIMEOUT_S
+    value: "300"

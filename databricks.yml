@@ -1,0 +1,63 @@
+# Prior Authorization Review on Databricks
+# Declarative Automation Bundle (Databricks Asset Bundle).
+#
+#   databricks bundle validate -t dev
+#   databricks bundle deploy   -t dev
+#   databricks bundle run pa_setup -t dev
+#   databricks bundle run pa_agents_deploy -t dev
+#   databricks bundle run pa_review_app -t dev
+#
+# See docs/RUNBOOK.md for the full step-by-step.
+
+bundle:
+  name: prior-auth-review
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog (must exist or you need CREATE CATALOG)
+    default: prior_auth
+  schema:
+    description: Schema for tables and volumes
+    default: core
+  warehouse_id:
+    description: SQL warehouse id (Delta writes, ai_parse_document, reference lookups)
+  llm_model:
+    description: "auto = pick from the workspace; or system.ai.<model> / databricks-<model>"
+    default: auto
+  mcp_mode:
+    description: "service = Unity Gateway MCP services; direct = public MCP URLs; off = no tools"
+    default: direct
+  endpoint_prefix:
+    description: Prefix of the 4 agent serving endpoints (<prefix>-<agent>-agent)
+    default: pa
+  secret_scope:
+    description: Secret scope holding sp_client_id / sp_client_secret for the agent endpoints
+    default: prior-auth
+  agent_auth_mode:
+    description: "service_principal (recommended) or passthrough"
+    default: service_principal
+  app_name:
+    description: "Databricks App name: lowercase, digits, hyphens, max 30 chars"
+    default: pa-review-${workspace.current_user.domain_friendly_name}
+  app_sp:
+    description: Application id of the app's service principal (fill after the first deploy)
+    default: ""
+  reviewers_group:
+    description: Workspace group of clinical reviewers (read access to tables)
+    default: ""
+
+targets:
+  dev:
+    default: true
+    mode: development
+
+  prod:
+    mode: production
+    workspace:
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      app_name: pa-review
+      mcp_mode: service

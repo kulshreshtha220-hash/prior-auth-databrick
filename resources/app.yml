@@ -1,0 +1,26 @@
+# The reviewer app: FastAPI backend + LangGraph orchestrator + static React UI.
+# Runtime env vars are in src/app/app.yaml.
+resources:
+  apps:
+    pa_review_app:
+      name: ${var.app_name}
+      description: Prior authorization review - multi-agent AI recommendation with human-in-the-loop decision
+      source_code_path: ../src/app
+      resources:
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+        - name: raw-documents
+          uc_securable:
+            securable_full_name: ${var.catalog}.${var.schema}.raw_documents
+            securable_type: VOLUME
+            permission: WRITE_VOLUME
+        - name: generated-reports
+          uc_securable:
+            securable_full_name: ${var.catalog}.${var.schema}.generated_reports
+            securable_type: VOLUME
+            permission: WRITE_VOLUME
+        # Lakebase: attach the database in the app UI (Edit -> Resources -> Database,
+        # permission "Can connect and create"). Databricks then injects PGHOST/PGUSER/...
+        # See docs/RUNBOOK.md step 6.

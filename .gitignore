@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+mlflow.db
+mlruns/
+.databricks/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+dist/
+.pytest_cache/
