@@ -31,7 +31,7 @@ T = lambda t: f"`{catalog}`.`{schema}`.`{t}`"  # noqa: E731
 
 import csv, datetime as dt, io, re, zipfile
 import requests
-
+csv.field_size_limit(2**31 - 1)
 now = dt.datetime.utcnow()
 HEADERS = {"User-Agent": "pa-review-databricks/1.0 (reference refresh)"}
 report = {}
