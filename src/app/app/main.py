@@ -54,7 +54,14 @@ def _startup() -> None:
             import mlflow
 
             mlflow.set_tracking_uri("databricks")
-            mlflow.set_experiment(s.mlflow_experiment)
+            exp = s.mlflow_experiment
+            # app resource "MLflow experiment" injects the experiment id; a path also works
+            if exp.isdigit():
+                mlflow.set_experiment(experiment_id=exp)
+            else:
+                mlflow.set_experiment(exp)
+            mlflow.openai.autolog()  # one span per LLM call (prompt, tokens, latency)
+            logger.info("MLflow tracing on: experiment %s", exp)
         except Exception as e:  # noqa: BLE001
             logger.warning("MLflow tracing disabled: %s", e)
     if s.state_store == "lakebase":

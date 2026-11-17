@@ -34,3 +34,5 @@ env:
     value: "false"
   - name: PA_AGENT_TIMEOUT_S
     value: "300"
+  - name: PA_MLFLOW_EXPERIMENT          # traces of every review (app resource key "mlflow-experiment")
+    valueFrom: mlflow-experiment

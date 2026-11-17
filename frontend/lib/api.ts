@@ -78,6 +78,7 @@ export function submitReviewStream(
       // resetting per-chunk would misroute the result as a progress event.
       let eventType = "progress";
       let receivedResult = false;
+      let receivedError = false;
 
       const processLines = (lines: string[]) => {
         for (const line of lines) {
@@ -91,6 +92,7 @@ export function submitReviewStream(
                 receivedResult = true;
                 onResult(parsed as ReviewResponse);
               } else if (eventType === "error") {
+                receivedError = true;
                 onError(parsed.detail || "Unknown error");
               } else {
                 onProgress(parsed as ProgressEvent);
@@ -120,7 +122,8 @@ export function submitReviewStream(
       }
 
       // If the stream completed without a result event, notify the caller
-      if (!receivedResult) {
+      // (keep the server's error message if one was sent)
+      if (!receivedResult && !receivedError) {
         onError("Review stream ended without returning a result. Please try again.");
       }
     } catch (err) {
