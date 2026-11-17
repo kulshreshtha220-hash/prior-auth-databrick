@@ -15,6 +15,13 @@ _token_cache: dict[str, float | str] = {"token": "", "exp": 0.0}
 
 
 def _password() -> str:
+    """Short-lived Postgres password for the app's service principal.
+
+    * Lakebase projects (autoscaling): Databricks Apps injects LAKEBASE_ENDPOINT;
+      the password is a database credential generated for that endpoint.
+    * Older Lakebase instances: the service principal's workspace OAuth token.
+    * PGPASSWORD (if set) wins, e.g. for local Postgres tests.
+    """
     if os.environ.get("PGPASSWORD"):
         return os.environ["PGPASSWORD"]
     if time.time() < float(_token_cache["exp"]):
@@ -22,8 +29,12 @@ def _password() -> str:
     from pa_core.llm import workspace_client
 
     w = workspace_client()
-    tok = w.config.oauth_token().access_token
-    _token_cache.update(token=tok, exp=time.time() + 40 * 60)
+    endpoint = os.environ.get("LAKEBASE_ENDPOINT")
+    if endpoint:
+        tok = w.postgres.generate_database_credential(endpoint=endpoint).token
+    else:
+        tok = w.config.oauth_token().access_token
+    _token_cache.update(token=tok, exp=time.time() + 40 * 60)  # tokens last 1 hour
     return tok
 
 

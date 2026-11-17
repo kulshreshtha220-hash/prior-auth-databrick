@@ -1,7 +1,8 @@
 # Databricks App runtime config (pa-review).
 #
-# CURRENT: demo mode (no SQL warehouse / Lakebase yet). Agents run inside the app,
-# results are kept in memory, data comes from the live MCP servers.
+# CURRENT: agents run inside the app, cases/decisions/audit saved in Lakebase
+# (resource key "database" -> project pa-lakebase), data from the live MCP servers.
+# Delta writes stay off until a SQL warehouse exists.
 #
 # When the SQL warehouse + Lakebase exist (see docs/RUNBOOK.md):
 #   PA_STATE_STORE=lakebase, PA_WRITE_DELTA=true, add the sql-warehouse resource and
@@ -18,7 +19,7 @@ env:
   - name: PA_AGENT_MODE
     value: "inprocess"
   - name: PA_STATE_STORE
-    value: "memory"
+    value: "lakebase"
   - name: PA_WRITE_DELTA
     value: "false"
   - name: PA_LLM_MODEL
