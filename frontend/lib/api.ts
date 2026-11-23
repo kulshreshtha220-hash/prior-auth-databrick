@@ -164,3 +164,48 @@ export async function uploadDocument(file: File): Promise<UploadedDocument> {
   }
   return response.json();
 }
+
+export interface CurrentUser {
+  email: string;
+  name: string;
+}
+
+/** Signed-in Databricks user (from the Apps SSO headers). Never throws. */
+export async function getMe(): Promise<CurrentUser | null> {
+  try {
+    const r = await fetch(`${API_BASE}/me`);
+    return r.ok ? await r.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+export interface QueueItem {
+  request_id: string;
+  patient_name?: string | null;
+  provider_npi?: string | null;
+  recommendation?: string | null;
+  confidence_level?: string | null;
+  decision_gate?: string | null;
+  created_at?: string | null;
+}
+
+/** Cases waiting for a human decision (Lakebase reviewer queue). */
+export async function getQueue(): Promise<QueueItem[]> {
+  const r = await fetch(`${API_BASE}/queue`);
+  if (!r.ok) {
+    const error = await r.json().catch(() => ({}));
+    throw new Error(formatApiError(error, r.status));
+  }
+  return r.json();
+}
+
+/** Load one stored review by request_id. */
+export async function getReview(requestId: string): Promise<ReviewResponse> {
+  const r = await fetch(`${API_BASE}/review/${encodeURIComponent(requestId)}`);
+  if (!r.ok) {
+    const error = await r.json().catch(() => ({}));
+    throw new Error(formatApiError(error, r.status));
+  }
+  return r.json();
+}

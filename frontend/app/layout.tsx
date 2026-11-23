@@ -3,7 +3,7 @@ import { Toaster } from "sonner";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Prior Authorization Review",
+  title: "Prior Authorization Review · Eucloid",
   description:
     "AI-assisted clinical review on Databricks: Mosaic AI agents, Unity Catalog and Lakebase",
 };

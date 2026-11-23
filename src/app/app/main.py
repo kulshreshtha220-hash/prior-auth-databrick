@@ -8,7 +8,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -77,6 +77,15 @@ def _startup() -> None:
 async def health():
     s = get_settings()
     return {"status": "ok", "agent_mode": s.agent_mode, "state_store": s.state_store, "mcp_mode": s.mcp_mode}
+
+
+@app.get("/api/me")
+async def me(request: Request):
+    """Signed-in user, from the headers the Databricks Apps proxy adds after SSO."""
+    h = request.headers
+    email = h.get("x-forwarded-email") or ""
+    name = h.get("x-forwarded-preferred-username") or h.get("x-forwarded-user") or email
+    return {"email": email, "name": name}
 
 
 @app.get("/api/config")

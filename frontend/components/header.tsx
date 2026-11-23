@@ -1,9 +1,44 @@
-import { ShieldCheck, Sparkles } from "lucide-react";
+import { Home, Inbox, ShieldCheck, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { EucloidMark } from "@/components/eucloid-mark";
 
-export function Header() {
+export function Header({
+  userName,
+  onHome,
+  onQueue,
+}: {
+  userName?: string | null;
+  onHome?: () => void;
+  onQueue?: () => void;
+}) {
   return (
     <header className="mb-10">
+      {/* Top navigation */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <button onClick={onHome} className="text-foreground" aria-label="Home">
+          <EucloidMark compact />
+        </button>
+        <div className="flex items-center gap-2">
+          {onHome && (
+            <Button variant="ghost" size="sm" onClick={onHome}>
+              <Home className="h-4 w-4" /> Home
+            </Button>
+          )}
+          {onQueue && (
+            <Button variant="outline" size="sm" onClick={onQueue}>
+              <Inbox className="h-4 w-4" /> Reviewer queue
+            </Button>
+          )}
+          {userName && (
+            <span className="hidden md:inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              {userName}
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* Gradient banner */}
       <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-brand via-brand-dark to-brand-darker px-6 py-8 text-white shadow-lg">
         {/* Decorative circles */}
