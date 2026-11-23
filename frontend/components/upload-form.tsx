@@ -2,10 +2,11 @@
 
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Plus, X, FlaskConical, User, CalendarDays, Hash, CreditCard, Stethoscope, FileText, Send, Paperclip } from "lucide-react";
+import { Loader2, Plus, X, User, CalendarDays, Hash, CreditCard, Stethoscope, FileText, Send, Paperclip } from "lucide-react";
 import type { PriorAuthRequest, ReviewResponse, ReviewProgress, ProgressEvent, AgentId } from "@/lib/types";
 import { submitReviewStream, uploadDocument } from "@/lib/api";
-import { SAMPLE_REQUEST } from "@/lib/sample-case";
+import type { SampleCase } from "@/lib/sample-case";
+import { SamplePicker } from "@/components/sample-picker";
 import { ProgressTracker } from "@/components/progress-tracker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -124,9 +125,14 @@ export function UploadForm({ onReviewComplete }: UploadFormProps) {
     );
   }
 
-  function loadSample() {
-    setForm({ ...SAMPLE_REQUEST });
+  function loadSample(c: SampleCase) {
+    setForm({
+      ...c.request,
+      diagnosis_codes: [...c.request.diagnosis_codes],
+      procedure_codes: [...c.request.procedure_codes],
+    });
     setError(null);
+    toast.info(`Loaded: ${c.label}`, { description: `Expected: ${c.expected}` });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -197,10 +203,7 @@ export function UploadForm({ onReviewComplete }: UploadFormProps) {
             Enter patient and procedure details for AI-assisted clinical review
           </p>
         </div>
-        <Button variant="secondary" size="sm" onClick={loadSample}>
-          <FlaskConical className="mr-1 h-3.5 w-3.5" />
-          Load Sample Case
-        </Button>
+        <SamplePicker onPick={loadSample} />
       </CardHeader>
 
       <CardContent>
