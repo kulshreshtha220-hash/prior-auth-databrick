@@ -43,7 +43,7 @@ export function SamplePicker({ onPick }: { onPick: (c: SampleCase) => void }) {
       </Button>
 
       {open && (
-        <div className="absolute right-0 z-40 mt-2 w-[min(92vw,420px)] overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-xl animate-in fade-in slide-in-from-top-1 duration-150">
+        <div className="absolute right-0 z-40 mt-2 max-h-[70vh] w-[min(92vw,420px)] overflow-y-auto rounded-xl border bg-popover text-popover-foreground shadow-xl animate-in fade-in slide-in-from-top-1 duration-150">
           {groups.map((g) => (
             <div key={g}>
               <p className="border-b bg-muted/50 px-4 py-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">

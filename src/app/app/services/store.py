@@ -139,14 +139,14 @@ def audit(request_id: str | None, event_type: str, data: dict | None = None, act
 def start_case(request_id: str, request_data: dict, actor: str = "system") -> None:
     if _is_mem():
         _mem[request_id] = {"request_id": request_id, "request_data": request_data, "response": None,
-                            "decision": None, "status": "RUNNING", "stored_at": _now()}
+                            "decision": None, "status": "RUNNING", "stored_at": _now(), "submitted_by": actor}
     else:
         with _lb().connection() as c:
             c.execute(
-                "INSERT INTO pa.cases (request_id, status, patient_name, provider_npi, request_data) "
-                "VALUES (%s,'RUNNING',%s,%s,%s::jsonb) ON CONFLICT (request_id) DO NOTHING",
+                "INSERT INTO pa.cases (request_id, status, patient_name, provider_npi, request_data, submitted_by) "
+                "VALUES (%s,'RUNNING',%s,%s,%s::jsonb,%s) ON CONFLICT (request_id) DO NOTHING",
                 (request_id, request_data.get("patient_name"), request_data.get("provider_npi"),
-                 json.dumps(request_data, default=str)),
+                 json.dumps(request_data, default=str), actor),
             )
     delta_insert("pa_requests", {
         "request_id": request_id, "provider_npi": request_data.get("provider_npi"),
@@ -241,7 +241,7 @@ def _row_to_review(row: dict) -> dict:
     if resp and not resp.get("audit_justification_pdf"):
         resp["audit_justification_pdf"] = _volume_read_b64(row.get("audit_pdf_path"))
     return {"request_id": row["request_id"], "request_data": row.get("request_data") or {}, "response": resp,
-            "decision": row.get("decision"), "status": row.get("status"),
+            "decision": row.get("decision"), "status": row.get("status"), "submitted_by": row.get("submitted_by"),
             "stored_at": (row.get("created_at") or _now()).isoformat() if hasattr(row.get("created_at"), "isoformat") else str(row.get("created_at"))}
 
 
@@ -272,7 +272,7 @@ def list_reviews(limit: int = 200) -> list[dict]:
     with _lb().connection() as c:
         cur = c.cursor(row_factory=dict_row)
         cur.execute(
-            """SELECT c.request_id, c.status, c.request_data, c.response, c.created_at, c.audit_pdf_path,
+            """SELECT c.request_id, c.status, c.request_data, c.response, c.created_at, c.audit_pdf_path, c.submitted_by,
                       CASE WHEN d.request_id IS NULL THEN NULL ELSE to_jsonb(d.*) END AS decision
                FROM pa.cases c LEFT JOIN pa.decisions d ON d.request_id = c.request_id
                WHERE c.response IS NOT NULL ORDER BY c.created_at DESC LIMIT %s""",
@@ -322,22 +322,68 @@ def store_decision(request_id: str, decision: dict) -> None:
                                             "was_overridden": decision["was_overridden"]}, decision["decided_by"])
 
 
-def reviewer_queue(limit: int = 100) -> list[dict]:
-    """Open cases waiting for a human decision (diagram: reviewer queue)."""
+def reviewer_queue(limit: int = 100, owner: str | None = None) -> list[dict]:
+    """Open cases waiting for a human decision (diagram: reviewer queue).
+
+    owner=None: every user's cases (reviewers). owner=<email>: only that user's cases.
+    """
     if _is_mem():
         return [{"request_id": r["request_id"], "patient_name": r["request_data"].get("patient_name"),
-                 "recommendation": (r.get("response") or {}).get("recommendation")}
-                for r in _mem.values() if r.get("response") and not r.get("decision")]
+                 "provider_npi": r["request_data"].get("provider_npi"),
+                 "recommendation": (r.get("response") or {}).get("recommendation"),
+                 "confidence_level": (r.get("response") or {}).get("confidence_level"),
+                 "decision_gate": (r.get("response") or {}).get("decision_gate"),
+                 "submitted_by": r.get("submitted_by"), "created_at": r.get("stored_at")}
+                for r in _mem.values()
+                if r.get("response") and not r.get("decision") and (owner is None or r.get("submitted_by") == owner)]
     from psycopg.rows import dict_row
 
     with _lb().connection() as c:
         cur = c.cursor(row_factory=dict_row)
         cur.execute(
             """SELECT request_id, patient_name, provider_npi, recommendation, confidence_level, decision_gate,
-                      created_at FROM pa.cases WHERE in_reviewer_queue ORDER BY created_at LIMIT %s""",
-            (limit,),
+                      submitted_by, created_at
+               FROM pa.cases WHERE in_reviewer_queue AND (%s::text IS NULL OR submitted_by = %s)
+               ORDER BY created_at LIMIT %s""",
+            (owner, owner, limit),
         )
         return cur.fetchall()
+
+
+def my_cases(owner: str, limit: int = 100) -> list[dict]:
+    """Every case one user submitted, any status, newest first (the doctor's own view)."""
+    if _is_mem():
+        rows = [r for r in _mem.values() if r.get("submitted_by") == owner]
+        rows.sort(key=lambda r: r["stored_at"], reverse=True)
+        return [{"request_id": r["request_id"], "patient_name": r["request_data"].get("patient_name"),
+                 "provider_npi": r["request_data"].get("provider_npi"),
+                 "status": "DECIDED" if r.get("decision") else r.get("status") or ("COMPLETED" if r.get("response") else "RUNNING"),
+                 "recommendation": (r.get("response") or {}).get("recommendation"),
+                 "confidence_level": (r.get("response") or {}).get("confidence_level"),
+                 "decision_gate": (r.get("response") or {}).get("decision_gate"),
+                 "final_recommendation": (r.get("decision") or {}).get("final_recommendation"),
+                 "submitted_by": owner, "created_at": r.get("stored_at")}
+                for r in rows[:limit]]
+    from psycopg.rows import dict_row
+
+    with _lb().connection() as c:
+        cur = c.cursor(row_factory=dict_row)
+        cur.execute(
+            """SELECT c.request_id, c.patient_name, c.provider_npi, c.status, c.recommendation, c.confidence_level,
+                      c.decision_gate, d.final_recommendation, c.submitted_by, c.created_at
+               FROM pa.cases c LEFT JOIN pa.decisions d ON d.request_id = c.request_id
+               WHERE c.submitted_by = %s ORDER BY c.created_at DESC LIMIT %s""",
+            (owner, limit),
+        )
+        return cur.fetchall()
+
+
+def case_owner(request_id: str) -> str | None:
+    if _is_mem():
+        return (_mem.get(request_id) or {}).get("submitted_by")
+    with _lb().connection() as c:
+        row = c.execute("SELECT submitted_by FROM pa.cases WHERE request_id=%s", (request_id,)).fetchone()
+    return row[0] if row else None
 
 
 def case_status(request_id: str) -> dict | None:

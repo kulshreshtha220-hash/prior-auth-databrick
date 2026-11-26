@@ -41,10 +41,12 @@ const TRUST = [
 
 export function Welcome({
   userName,
+  isReviewer = false,
   onStart,
   onQueue,
 }: {
   userName?: string | null;
+  isReviewer?: boolean;
   onStart: () => void;
   onQueue: () => void;
 }) {
@@ -114,7 +116,7 @@ export function Welcome({
               className="h-12 border-white/25 bg-white/5 px-6 text-base text-white hover:bg-white/10 hover:text-white"
             >
               <Inbox className="h-4 w-4" />
-              Reviewer queue
+              {isReviewer ? "Reviewer queue" : "My requests"}
             </Button>
           </div>
 

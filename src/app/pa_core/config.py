@@ -96,6 +96,17 @@ class Settings:
     # MLflow experiment for traces from the app
     mlflow_experiment: str = field(default_factory=lambda: _env("PA_MLFLOW_EXPERIMENT", ""))
 
+    # Who may see every user's cases (the clinical reviewers): comma-separated emails, or "*" for all.
+    # Everyone else sees only the cases they submitted.
+    reviewers: str = field(default_factory=lambda: _env("PA_REVIEWERS", ""))
+    # Let the person who submitted a case also record its final decision (demo). Set false in production
+    # so only reviewers decide.
+    allow_self_decision: bool = field(default_factory=lambda: _env_bool("PA_ALLOW_SELF_DECISION", True))
+
+    def is_reviewer(self, email: str | None) -> bool:
+        names = {e.strip().lower() for e in self.reviewers.split(",") if e.strip()}
+        return "*" in names or bool(email and email.strip().lower() in names)
+
     @property
     def fq_schema(self) -> str:
         return f"{self.catalog}.{self.schema}"

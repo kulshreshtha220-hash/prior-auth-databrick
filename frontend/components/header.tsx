@@ -5,10 +5,12 @@ import { EucloidMark } from "@/components/eucloid-mark";
 
 export function Header({
   userName,
+  isReviewer = false,
   onHome,
   onQueue,
 }: {
   userName?: string | null;
+  isReviewer?: boolean;
   onHome?: () => void;
   onQueue?: () => void;
 }) {
@@ -27,7 +29,7 @@ export function Header({
           )}
           {onQueue && (
             <Button variant="outline" size="sm" onClick={onQueue}>
-              <Inbox className="h-4 w-4" /> Reviewer queue
+              <Inbox className="h-4 w-4" /> {isReviewer ? "Reviewer queue" : "My requests"}
             </Button>
           )}
           {userName && (

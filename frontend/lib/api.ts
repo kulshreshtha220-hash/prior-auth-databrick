@@ -168,6 +168,7 @@ export async function uploadDocument(file: File): Promise<UploadedDocument> {
 export interface CurrentUser {
   email: string;
   name: string;
+  is_reviewer?: boolean;
 }
 
 /** Signed-in Databricks user (from the Apps SSO headers). Never throws. */
@@ -188,11 +189,24 @@ export interface QueueItem {
   confidence_level?: string | null;
   decision_gate?: string | null;
   created_at?: string | null;
+  submitted_by?: string | null;
+  status?: string | null;
+  final_recommendation?: string | null;
 }
 
 /** Cases waiting for a human decision (Lakebase reviewer queue). */
 export async function getQueue(): Promise<QueueItem[]> {
   const r = await fetch(`${API_BASE}/queue`);
+  if (!r.ok) {
+    const error = await r.json().catch(() => ({}));
+    throw new Error(formatApiError(error, r.status));
+  }
+  return r.json();
+}
+
+/** Every case the signed-in user submitted (any status). */
+export async function getMyCases(): Promise<QueueItem[]> {
+  const r = await fetch(`${API_BASE}/my-cases`);
   if (!r.ok) {
     const error = await r.json().catch(() => ({}));
     throw new Error(formatApiError(error, r.status));

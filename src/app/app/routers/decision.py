@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from app.models.schemas import DecisionRequest, DecisionResponse, NotificationLetter
 from app.agents.orchestrator import get_review, store_decision
@@ -21,7 +21,7 @@ router = APIRouter()
 
 
 @router.post("/decision", response_model=DecisionResponse)
-async def submit_decision(request: DecisionRequest):
+async def submit_decision(request: DecisionRequest, http_request: Request):
     """Accept or override the AI recommendation and generate a notification letter.
 
     Requires that the review has already been completed (request_id must exist
@@ -34,6 +34,15 @@ async def submit_decision(request: DecisionRequest):
             status_code=404,
             detail=f"Review {request.request_id} not found",
         )
+
+    from pa_core.config import get_settings
+    from app.routers.review import _actor
+
+    s = get_settings()
+    user = _actor(http_request)
+    is_owner = stored.get("submitted_by") is not None and stored.get("submitted_by") == user
+    if not (s.is_reviewer(user) or (s.allow_self_decision and is_owner)):
+        raise HTTPException(status_code=403, detail="Only a clinical reviewer can record a decision on this case")
 
     if stored.get("decision"):
         raise HTTPException(

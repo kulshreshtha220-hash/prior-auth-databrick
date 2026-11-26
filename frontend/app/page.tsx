@@ -35,11 +35,15 @@ export default function Home() {
   const [ready, setReady] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
+  const [isReviewer, setIsReviewer] = useState(false);
 
   useEffect(() => {
     setEntered(readEntered());
     setReady(true);
-    getMe().then((u) => setUserName(u?.name || u?.email || null));
+    getMe().then((u) => {
+      setUserName(u?.name || u?.email || null);
+      setIsReviewer(Boolean(u?.is_reviewer));
+    });
   }, []);
 
   function start() {
@@ -72,11 +76,11 @@ export default function Home() {
   return (
     <>
       {!entered ? (
-        <Welcome userName={userName} onStart={start} onQueue={() => setQueueOpen(true)} />
+        <Welcome userName={userName} isReviewer={isReviewer} onStart={start} onQueue={() => setQueueOpen(true)} />
       ) : (
         <div className="min-h-screen bg-gradient-to-b from-info-light/50 via-background to-background animate-in fade-in duration-500">
           <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
-            <Header userName={userName} onHome={goHome} onQueue={() => setQueueOpen(true)} />
+            <Header userName={userName} isReviewer={isReviewer} onHome={goHome} onQueue={() => setQueueOpen(true)} />
             <UploadForm onReviewComplete={setReview} />
             {review && (
               <div id="review-result">
@@ -93,7 +97,7 @@ export default function Home() {
           </footer>
         </div>
       )}
-      {queueOpen && <QueuePanel onClose={() => setQueueOpen(false)} onOpen={openCase} />}
+      {queueOpen && <QueuePanel isReviewer={isReviewer} onClose={() => setQueueOpen(false)} onOpen={openCase} />}
     </>
   );
 }

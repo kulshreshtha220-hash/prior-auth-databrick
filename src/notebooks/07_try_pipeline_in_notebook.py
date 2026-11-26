@@ -26,7 +26,7 @@ dbutils.widgets.dropdown("mcp_mode", "direct", ["direct", "service", "off"], "MC
 dbutils.widgets.dropdown("data_sources", "mcp_all", ["mcp_all", "uc_plus_literature", "uc_only"], "Data sources")
 dbutils.widgets.text("catalog", "db_certification")
 dbutils.widgets.text("schema", "prior_auth")
-dbutils.widgets.dropdown("case", "seed-001-lung-biopsy", ["seed-001-lung-biopsy", "seed-002-invalid-icd", "seed-003-thin-notes", "seed-004-bad-npi"])
+dbutils.widgets.dropdown("case", "seed-001-lung-biopsy", ["seed-001-lung-biopsy", "seed-002-invalid-icd", "seed-003-thin-notes", "seed-004-bad-npi", "seed-005-strong-biopsy", "seed-006-ebus-staging"])
 
 # COMMAND ----------
 

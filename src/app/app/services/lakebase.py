@@ -111,6 +111,9 @@ CREATE TABLE IF NOT EXISTS pa.cases (
     updated_at        TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_cases_queue ON pa.cases (in_reviewer_queue, created_at DESC);
+-- who submitted the case (Databricks login email); added later, so ALTER for existing tables
+ALTER TABLE pa.cases ADD COLUMN IF NOT EXISTS submitted_by TEXT;
+CREATE INDEX IF NOT EXISTS idx_cases_owner ON pa.cases (submitted_by, created_at DESC);
 CREATE TABLE IF NOT EXISTS pa.decisions (
     request_id          TEXT PRIMARY KEY REFERENCES pa.cases(request_id),
     authorization_number TEXT NOT NULL,
@@ -131,6 +134,10 @@ CREATE TABLE IF NOT EXISTS pa.audit_events (
     created_at  TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_audit_req ON pa.audit_events (request_id, created_at);
+-- backfill the owner of cases created before submitted_by existed
+UPDATE pa.cases c SET submitted_by = e.actor
+FROM pa.audit_events e
+WHERE c.submitted_by IS NULL AND e.request_id = c.request_id AND e.event_type = 'review_started';
 """
 
 

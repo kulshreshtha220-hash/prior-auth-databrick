@@ -35,6 +35,14 @@ def _actor(http_request: Request | None) -> str:
     h = http_request.headers
     return h.get("x-forwarded-email") or h.get("x-forwarded-preferred-username") or h.get("x-forwarded-user") or "unknown"
 
+def can_view(http_request: Request | None, owner: str | None) -> bool:
+    """Reviewers see every case; everyone else only the cases they submitted."""
+    from pa_core.config import get_settings
+
+    user = _actor(http_request)
+    return get_settings().is_reviewer(user) or (owner is not None and owner == user)
+
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -246,18 +254,20 @@ async def submit_review_stream(request: PriorAuthRequest, http_request: Request)
 
 
 @router.get("/review/{request_id}", response_model=ReviewResponse)
-async def get_review_by_id(request_id: str):
-    """Retrieve a previously completed review by its request_id."""
+async def get_review_by_id(request_id: str, http_request: Request):
+    """Retrieve a previously completed review by its request_id (owner or reviewer only)."""
     stored = get_review(request_id)
     if not stored:
         raise HTTPException(status_code=404, detail=f"Review {request_id} not found")
+    if not can_view(http_request, stored.get("submitted_by")):
+        raise HTTPException(status_code=403, detail="This case belongs to another user")
     return ReviewResponse(**stored["response"])
 
 
 @router.get("/reviews", response_model=list[ReviewSummary])
-async def get_all_reviews():
-    """List all completed reviews (most recent first)."""
-    reviews = list_reviews()
+async def get_all_reviews(http_request: Request):
+    """List completed reviews (most recent first): all for reviewers, own cases for everyone else."""
+    reviews = [r for r in list_reviews() if can_view(http_request, r.get("submitted_by"))]
     return [
         ReviewSummary(
             request_id=r["request_id"],
@@ -1149,15 +1159,28 @@ def _safe_parse(model_class, data):
 
 
 @router.get("/queue")
-async def reviewer_queue():
-    """Cases waiting for a clinical reviewer's decision (Lakebase)."""
-    return await asyncio.to_thread(_store.reviewer_queue)
+async def reviewer_queue(http_request: Request):
+    """Cases waiting for a decision (Lakebase). Reviewers: every user's cases; others: only their own."""
+    from pa_core.config import get_settings
+
+    user = _actor(http_request)
+    owner = None if get_settings().is_reviewer(user) else user
+    return await asyncio.to_thread(_store.reviewer_queue, 100, owner)
+
+
+@router.get("/my-cases")
+async def my_cases(http_request: Request):
+    """Every case the signed-in user submitted, any status (the doctor's own view)."""
+    return await asyncio.to_thread(_store.my_cases, _actor(http_request))
 
 
 @router.get("/review/{request_id}/status")
-async def review_status(request_id: str):
-    """Live case status and progress (Lakebase)."""
+async def review_status(request_id: str, http_request: Request):
+    """Live case status and progress (Lakebase), owner or reviewer only."""
     st = await asyncio.to_thread(_store.case_status, request_id)
     if not st:
         raise HTTPException(status_code=404, detail=f"Review {request_id} not found")
+    owner = await asyncio.to_thread(_store.case_owner, request_id)
+    if not can_view(http_request, owner):
+        raise HTTPException(status_code=403, detail="This case belongs to another user")
     return st

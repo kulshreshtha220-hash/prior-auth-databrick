@@ -34,5 +34,9 @@ env:
     value: "false"
   - name: PA_AGENT_TIMEOUT_S
     value: "300"
+  - name: PA_REVIEWERS                  # emails (comma-separated) who see EVERY user's cases; "*" = everyone.
+    value: ""                           # empty = each user sees only the cases they submitted
+  - name: PA_ALLOW_SELF_DECISION        # demo: the submitter can also accept/override; set "false" in production
+    value: "true"
   - name: PA_MLFLOW_EXPERIMENT          # traces of every review (app resource key "mlflow-experiment")
     valueFrom: mlflow-experiment

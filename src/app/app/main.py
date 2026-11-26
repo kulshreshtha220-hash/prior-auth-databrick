@@ -85,7 +85,7 @@ async def me(request: Request):
     h = request.headers
     email = h.get("x-forwarded-email") or ""
     name = h.get("x-forwarded-preferred-username") or h.get("x-forwarded-user") or email
-    return {"email": email, "name": name}
+    return {"email": email, "name": name, "is_reviewer": get_settings().is_reviewer(email or None)}
 
 
 @app.get("/api/config")
