@@ -232,3 +232,37 @@ def test_per_agent_coverage_inherits_validation() -> None:
     }
     response = client.post("/api/agents/coverage", json=body)
     assert response.status_code == 422, response.text
+
+
+def test_null_optional_fields_do_not_drop_diagnosis_validation():
+    """Live bug 2026-11-26: the LLM wrote hierarchy_note: null, the whole diagnosis_validation list was
+    dropped, and Gate 2 pended with 'ICD-10 validation returned no results' although all codes were valid."""
+    from pa_core import gates
+    from pa_core.agent_runtime import _validate
+
+    clinical, issue = _validate("clinical", {
+        "diagnosis_validation": [
+            {"code": "R91.1", "valid": True, "description": "Solitary pulmonary nodule", "billable": True, "hierarchy_note": None},
+            {"code": "R05.9", "valid": True, "description": None, "billable": True, "hierarchy_note": None},
+        ],
+        "clinical_extraction": {"chief_complaint": "nodule", "extraction_confidence": 90, "severity_indicators": ["growth"]},
+        "clinical_summary": "ok",
+    })
+    assert issue is None
+    assert [d["code"] for d in clinical["diagnosis_validation"]] == ["R91.1", "R05.9"]
+
+    coverage = {"provider_verification": {"status": "VERIFIED"},
+                "criteria_assessment": [{"criterion": "Provider Specialty-Procedure Appropriateness", "status": "MET", "confidence": 95},
+                                        {"criterion": "Diagnosis-Policy Alignment", "status": "MET", "confidence": 90}]}
+    out = gates.evaluate({"checklist": [], "overall_status": "complete"}, clinical, coverage, {"valid": True})
+    assert out.gate_results["gate_2_codes"] == "PASS"
+
+
+def test_one_bad_list_item_keeps_the_others():
+    from pa_core.agent_runtime import _validate
+
+    clinical, issue = _validate("clinical", {
+        "diagnosis_validation": [{"code": "R91.1", "valid": True, "billable": True}, {"code": "X", "valid": {"bad": 1}}],
+    })
+    assert issue
+    assert [d["code"] for d in clinical["diagnosis_validation"]] == ["R91.1"]

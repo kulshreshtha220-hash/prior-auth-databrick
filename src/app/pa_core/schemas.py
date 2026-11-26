@@ -5,7 +5,23 @@ Every agent's final answer is validated against one of these models.
 """
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel as _PydanticBase
+from pydantic import model_validator
+
+
+class BaseModel(_PydanticBase):
+    """Tolerant base: a JSON null from the LLM means "use the default".
+
+    Without this, one optional field written as null (e.g. hierarchy_note: null) fails the
+    whole item and the agent's list (e.g. diagnosis_validation) would be dropped.
+    """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _nulls_to_defaults(cls, data):
+        if isinstance(data, dict):
+            return {k: v for k, v in data.items() if v is not None}
+        return data
 
 
 class AgentCheck(BaseModel):

@@ -54,16 +54,27 @@ def _validate(agent_key: str, data: dict) -> tuple[dict, str | None]:
     try:
         return schema.model_validate(data).model_dump(), None
     except ValidationError as e:
-        # keep what we can: defaults for broken fields
+        # Keep everything that is valid: whole fields, and for lists the individual valid items,
+        # so one malformed entry never drops a whole list (e.g. diagnosis_validation).
         logger.warning("%s output failed validation: %s", agent_key, e)
         clean = {}
         for k, v in data.items():
-            if k in schema.model_fields:
-                try:
-                    schema.model_validate({k: v})
-                    clean[k] = v
-                except ValidationError:
-                    pass
+            if k not in schema.model_fields:
+                continue
+            try:
+                schema.model_validate({k: v})
+                clean[k] = v
+            except ValidationError:
+                if isinstance(v, list):
+                    kept = []
+                    for item in v:
+                        try:
+                            schema.model_validate({k: [item]})
+                            kept.append(item)
+                        except ValidationError:
+                            pass
+                    if kept:
+                        clean[k] = kept
         return schema.model_validate(clean).model_dump(), str(e)[:500]
 
 
