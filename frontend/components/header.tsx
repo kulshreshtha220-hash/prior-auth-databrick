@@ -18,7 +18,7 @@ export function Header({
     <header className="mb-10">
       {/* Top navigation */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <button onClick={onHome} className="text-foreground" aria-label="Home">
+        <button onClick={onHome} className="text-[#10326E]" aria-label="Home">
           <EucloidMark compact />
         </button>
         <div className="flex items-center gap-2">

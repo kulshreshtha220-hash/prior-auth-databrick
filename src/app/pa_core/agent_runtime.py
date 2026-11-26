@@ -65,7 +65,18 @@ def _validate(agent_key: str, data: dict) -> tuple[dict, str | None]:
                 schema.model_validate({k: v})
                 clean[k] = v
             except ValidationError:
-                if isinstance(v, list):
+                if isinstance(v, dict):
+                    # nested object (e.g. clinical_extraction): keep its valid sub-fields
+                    sub = {}
+                    for sk, sv in v.items():
+                        try:
+                            schema.model_validate({k: {sk: sv}})
+                            sub[sk] = sv
+                        except ValidationError:
+                            pass
+                    if sub:
+                        clean[k] = sub
+                elif isinstance(v, list):
                     kept = []
                     for item in v:
                         try:

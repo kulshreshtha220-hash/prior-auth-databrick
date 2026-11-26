@@ -1,14 +1,17 @@
 import { cn } from "@/lib/utils";
 
-/** Text logo: Eucloid wordmark + product name. Swap in the real logo file when available. */
+/**
+ * Eucloid brand mark: the official icon (public/eucloid-icon.png, transparent background)
+ * plus the EUCLOID wordmark as text, so it stays crisp and takes the colour of its context
+ * (white on the dark welcome screen, navy on light pages).
+ */
 export function EucloidMark({ className, compact = false }: { className?: string; compact?: boolean }) {
   return (
     <div className={cn("flex items-center gap-3", className)}>
-      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-cyan-500 text-base font-black text-white shadow">
-        e
-      </span>
-      <div className="leading-tight">
-        <div className="text-base font-bold tracking-tight">eucloid</div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/eucloid-icon.png" alt="Eucloid" width={40} height={40} className="h-10 w-10 shrink-0" />
+      <div className="leading-tight text-left">
+        <div className="text-lg font-extrabold tracking-[0.12em]">EUCLOID</div>
         {!compact && <div className="text-[11px] opacity-70">Prior Authorization Review</div>}
       </div>
     </div>

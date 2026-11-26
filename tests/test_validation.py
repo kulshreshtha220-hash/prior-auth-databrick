@@ -266,3 +266,34 @@ def test_one_bad_list_item_keeps_the_others():
     })
     assert issue
     assert [d["code"] for d in clinical["diagnosis_validation"]] == ["R91.1"]
+
+
+@pytest.mark.parametrize("patch", [
+    {"extraction_confidence": 92.5},
+    {"extraction_confidence": "92%"},
+    {"extraction_confidence": 0.92},
+    {"medical_history_and_comorbidities": ["COPD", "HTN"]},
+    {"prior_treatments": "amoxicillin-clavulanate, no response"},
+    {"chief_complaint": {"value": "growing nodule", "confidence": 92}, "extraction_confidence": None},
+])
+def test_clinical_extraction_survives_llm_shape_variations(patch):
+    """Live bug 2026-11-26: Robert Miller pended at Gate 3 (Path B) with extraction confidence 0 because
+    the whole clinical_extraction object was dropped over one field's JSON shape."""
+    from pa_core import gates
+    from pa_core.agent_runtime import _validate
+
+    base = {"chief_complaint": "nodule", "history_of_present_illness": "growing RLL nodule",
+            "prior_treatments": ["antibiotics, no change"], "severity_indicators": ["growth 1.3 to 1.9 cm"],
+            "extraction_confidence": 92}
+    clinical, _ = _validate("clinical", {
+        "diagnosis_validation": [{"code": "R91.1", "valid": True, "billable": True}],
+        "clinical_extraction": {**base, **patch},
+    })
+    ce = clinical["clinical_extraction"]
+    assert ce is not None and ce["extraction_confidence"] == 92
+    coverage = {"provider_verification": {"status": "VERIFIED"}, "coverage_policies": [],
+                "criteria_assessment": [{"criterion": "Provider Specialty-Procedure Appropriateness", "status": "MET", "confidence": 95},
+                                        {"criterion": "Diagnosis-Policy Alignment", "status": "MET", "confidence": 0.9}]}
+    out = gates.evaluate({"checklist": [], "overall_status": "complete"}, clinical, coverage, {"valid": True})
+    assert out.gate_results == {"gate_1_provider": "PASS", "gate_2_codes": "PASS", "gate_3_necessity": "PASS"}
+    assert out.recommendation == gates.APPROVE
