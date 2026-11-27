@@ -172,7 +172,7 @@ export const SAMPLE_CASES: SampleCase[] = [
   {
     id: "approve-microsoft",
     group: "Approve cases",
-    label: "Approve: Microsoft original sample",
+    label: "Approve: Original sample",
     expected: "APPROVE · HIGH (~0.90)",
     tone: "success",
     description: "The accelerator's own sample case (John Smith, CPT 31628). Approved 0.90 in our notebook test.",
